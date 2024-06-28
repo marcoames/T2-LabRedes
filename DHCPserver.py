@@ -32,38 +32,44 @@ def create_socket(server_ip):
     print("Socket Criado...")
     return s
 
-# Função para criar pacotes DHCP Offer
-def create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip):
+# Função para criar pacote DHCP Offer
+def dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip):
     # Eth header
     dest_mac = client_mac
     src_mac = server_mac
     eth_type = b'\x08\x00'  # IPv4
 
+    # novo Header ETH
     eth_header = dest_mac + src_mac + eth_type
 
     # IP header 
-    version_ihl = (4 << 4) + 5
-    tos = 0
-    total_length = 0  
-    packet_id = random.randint(0, 65535)
-    fragment_offset = 0
-    ttl = 64
-    protocol = socket.IPPROTO_UDP
+    version = b'\x45'
+    dsf = b'\x00'  
+    total_length = b'\x00\x00' 
+    identification = b'\x00\x00'
+    fragment_offset = b'\x00\x00'
+    ttl = b'\x80'
+    protocol = b'\x11'
+    checksum = b'\x00\x00'
     source_ip = socket.inet_aton(server_ip)
     dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
 
-    ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, 0, source_ip, dest_ip)
+    ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + checksum + source_ip + dest_ip
 
     ip_checksum = calculate_checksum(ip_header)
-    ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, ip_checksum, source_ip, dest_ip)
+    ip_checksum = ip_checksum.to_bytes(2, byteorder='big')
+
+    # novo Header IP
+    ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + ip_checksum + source_ip + dest_ip
 
     # UDP header
-    source_port = 67
-    dest_port = 68
-    length = 0  
-    checksum = 0
+    source_port = b'\x00\x43'
+    dest_port = b'\x00\x44'
+    length = b'\x00\x00'  
+    checksum = b'\x00\x00'
 
-    udp_header = struct.pack('!HHHH', source_port, dest_port, length, checksum)
+    # novo Header UDP sem checksum e len
+    udp_header = source_port + dest_port + length + checksum
 
     # DHCP header
     op = b'\x02'              
@@ -82,6 +88,7 @@ def create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered
     file = b'\x00' * 128
     magic_cookie = b'\x63\x82\x53\x63'  
 
+    # novo Header DHCP
     dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file + magic_cookie
 
     # DHCP options
@@ -100,49 +107,63 @@ def create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered
 
     # Calcula UDP length e checksum
     udp_length = 8 + len(dhcp_header) + len(options)
-    pseudo_header = source_ip + dest_ip + struct.pack('!BBH', 0, protocol, udp_length)
-    udp_checksum = calculate_checksum(pseudo_header + udp_header + dhcp_header + options)
-    udp_header = struct.pack('!HHHH', source_port, dest_port, udp_length, udp_checksum)
+    header = source_ip + dest_ip + b'\x00' + b'\x11' + udp_length.to_bytes(2, byteorder='big')
+
+    # UDP header com length
+    udp_header = source_port + dest_port + udp_length.to_bytes(2, byteorder='big') + checksum
+
+    udp_checksum = calculate_checksum(header + udp_header + dhcp_header + options)
+    udp_checksum = udp_checksum.to_bytes(2, byteorder='big')
+
+    # UDP header com checksum
+    udp_header = source_port + dest_port + udp_length.to_bytes(2, byteorder='big') + udp_checksum
 
     # Pacote final
     packet = eth_header + ip_header + udp_header + dhcp_header + options
 
-    print("Enviando Pacote: ", packet)
+    print("Enviando Pacote Offer: ", packet)
 
     return packet
 
 
-# Função para criar pacotes DHCP Acknowledgement
-def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip):
+# Função para criar pacote DHCP Acknowledgement
+def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip):
+    # Eth header
     dest_mac = client_mac
     src_mac = server_mac
     eth_type = b'\x08\x00'  # IPv4
 
     eth_header = dest_mac + src_mac + eth_type
 
-    # IP header
-    version_ihl = (4 << 4) + 5
-    tos = 0
-    total_length = 0 
-    packet_id = random.randint(0, 65535)
-    fragment_offset = 0
-    ttl = 64
-    protocol = socket.IPPROTO_UDP
+    # IP header 
+    version = b'\x45'
+    dsf = b'\x00'  
+    total_length = b'\x00\x00' 
+    identification = b'\x00\x00'
+    fragment_offset = b'\x00\x00'
+    ttl = b'\x80'
+    protocol = b'\x11'
+    checksum = b'\x00\x00'
     source_ip = socket.inet_aton(server_ip)
     dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
 
-    ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, 0, source_ip, dest_ip)
+    ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + checksum + source_ip + dest_ip
 
     ip_checksum = calculate_checksum(ip_header)
-    ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, ip_checksum, source_ip, dest_ip)
+    ip_checksum = ip_checksum.to_bytes(2, byteorder='big')
+
+    # novo Header IP
+    ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + ip_checksum + source_ip + dest_ip
+
 
     # UDP header
-    source_port = 67
-    dest_port = 68
-    length = 0 
-    checksum = 0
+    source_port = b'\x00\x43'
+    dest_port = b'\x00\x44'
+    length = b'\x00\x00'  
+    checksum = b'\x00\x00'
 
-    udp_header = struct.pack('!HHHH', source_port, dest_port, length, checksum)
+    # novo Header UDP sem checksum e len
+    udp_header = source_port + dest_port + length + checksum
 
     #DHCP header 
     op = b'\x02'              
@@ -161,6 +182,7 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
     file = b'\x00' * 128
     magic_cookie = b'\x63\x82\x53\x63'  
 
+    # novo Header DHCP
     dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file + magic_cookie
 
     # DHCP options
@@ -174,12 +196,21 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
 
     # Calcula UDP length e checksum
     udp_length = 8 + len(dhcp_header) + len(options)
-    pseudo_header = source_ip + dest_ip + struct.pack('!BBH', 0, protocol, udp_length)
-    udp_checksum = calculate_checksum(pseudo_header + udp_header + dhcp_header + options)
-    udp_header = struct.pack('!HHHH', source_port, dest_port, udp_length, udp_checksum)
+    header = source_ip + dest_ip + b'\x00' + b'\x11' + udp_length.to_bytes(2, byteorder='big')
+
+    # UDP header com length
+    udp_header = source_port + dest_port + udp_length.to_bytes(2, byteorder='big') + checksum
+
+    udp_checksum = calculate_checksum(header + udp_header + dhcp_header + options)
+    udp_checksum = udp_checksum.to_bytes(2, byteorder='big')
+
+    # UDP header com checksum
+    udp_header = source_port + dest_port + udp_length.to_bytes(2, byteorder='big') + udp_checksum
 
     # Pacote final
     packet = eth_header + ip_header + udp_header + dhcp_header + options
+
+    print("Enviando Pacote Acknowledgement: ", packet)
 
     return packet
 
@@ -214,10 +245,12 @@ def dhcp_server():
             print("Message Type: ", message_type)
 
             # dados do header eth
-            eth_header = packet[0:14]
+            # eth_header = packet[0:14]
+            # print("Eth header: ", eth_header.hex())
 
             # dados do header ip
-            ip_header = packet [15:34]
+            ip_header = packet [0:20]
+            print("IP header: ", ip_header.hex())
 
             # transaction_id = dhcp_header[4:8]
             transaction_id = packet[46-14:50-14]
@@ -228,13 +261,15 @@ def dhcp_server():
             # Envia Pacotes de Offer e Ack
             if message_type == 1:
                 print(f'DHCP Discover recebido de {addr}, enviando DHCP Offer')
-                offer_packet = create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
-                s.sendto(offer_packet, ('<broadcast>', 68))
+                packet = dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
+                s.sendto(packet, ('<broadcast>', 68))
+                #s.sendto(packet, (addr, 68))
 
             elif message_type == 3:
                 print(f'DHCP Request recebido de {addr}, enviando DHCP Acknowledgement')
-                ack_packet = create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
-                s.sendto(ack_packet, ('<broadcast>', 68))
+                packet = dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
+                s.sendto(packet, ('<broadcast>', 68))
+                #s.sendto(packet, (addr, 68))
         
         except BlockingIOError:
             pass
