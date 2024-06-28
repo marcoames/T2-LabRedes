@@ -1,6 +1,4 @@
 import socket
-import struct
-import random
 import sys
 import uuid
 
@@ -25,9 +23,9 @@ def calculate_checksum(msg):
     return s
 
 # Criação do socket RAW
-def create_socket(server_ip):
+def create_socket():
     s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-    s.bind((server_ip, 67)) 
+    s.bind(('', 67)) 
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     print("Socket Criado...")
     return s
@@ -226,7 +224,7 @@ def dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_ip, masc
 def dhcp_server():
     hostname = socket.gethostname()
     server_ip = socket.gethostbyname(hostname)
-    s = create_socket(server_ip)
+    s = create_socket()
     print("SERVER IP: ", server_ip)
     server_mac = get_mac_address()
     print("Server MAC: ", server_mac)
