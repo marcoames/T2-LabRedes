@@ -5,14 +5,14 @@ import sys
 import uuid
 
 def get_mac_address():
-    mac_int = uuid.getnode()  # Get the MAC address as a 48-bit integer
-    mac_bytes = mac_int.to_bytes(6, byteorder='big')  # Convert to bytes
+    mac_int = uuid.getnode()  
+    mac_bytes = mac_int.to_bytes(6, byteorder='big')  # Converte bytes
 
-    # Format the bytes as '\x1c\x1b\x0d\xf1\x9a\xb0'
-    formatted_mac = b''.join([bytes([int(b)]) for b in mac_bytes])
-    return formatted_mac
+    # Formata
+    mac = b''.join([bytes([int(b)]) for b in mac_bytes])
+    return mac
 
-# Funções auxiliares para calcular o checksum dos pacotes IP
+# Checksum dos pacotes
 def calculate_checksum(msg):
     s = 0
     for i in range(0, len(msg), 2):
@@ -24,7 +24,7 @@ def calculate_checksum(msg):
 
     return s
 
-# Criação do socket RAW para interceptar pacotes DHCP
+# Criação do socket RAW
 def create_socket(server_ip):
     s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
     s.bind((server_ip, 67)) 
@@ -50,7 +50,7 @@ def create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered
     ttl = 64
     protocol = socket.IPPROTO_UDP
     source_ip = socket.inet_aton(server_ip)
-    dest_ip = b'\xff\xff\xff\xff'  # Broadcast
+    dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
 
     ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, 0, source_ip, dest_ip)
 
@@ -98,7 +98,7 @@ def create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered
     options += b'\xff'  # End option
     options += b'\x00\x00\x00\x00' # padding
 
-    # Calculate UDP length and checksum
+    # Calcula UDP length e checksum
     udp_length = 8 + len(dhcp_header) + len(options)
     pseudo_header = source_ip + dest_ip + struct.pack('!BBH', 0, protocol, udp_length)
     udp_checksum = calculate_checksum(pseudo_header + udp_header + dhcp_header + options)
@@ -129,7 +129,7 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
     ttl = 64
     protocol = socket.IPPROTO_UDP
     source_ip = socket.inet_aton(server_ip)
-    dest_ip = b'\xff\xff\xff\xff'  # Broadcast
+    dest_ip = b'\xff\xff\xff\xff'  # Broadcast --> Ip do cliente
 
     ip_header = struct.pack('!BBHHHBBH4s4s', version_ihl, tos, total_length, packet_id, fragment_offset, ttl, protocol, 0, source_ip, dest_ip)
 
@@ -159,12 +159,12 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
     chaddr = client_mac + b'\x00' * 10
     sname = b'\x00' * 64
     file = b'\x00' * 128
+    magic_cookie = b'\x63\x82\x53\x63'  
 
-    dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file
+    dhcp_header = op + htype + hlen + hops + xid + secs + flags + ciaddr + yiaddr + siaddr + giaddr + chaddr + sname + file + magic_cookie
 
     # DHCP options
     options = b''
-    options += b'\x63\x82\x53\x63'  # Magic cookie
     options += b'\x35\x01\x05'  # DHCP Ack
     options += b'\x01\x04' + socket.inet_aton(mascara)  # Mascara
     options += b'\x03\x04' + socket.inet_aton(router_ip)  # Router
@@ -172,7 +172,7 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
     options += b'\x33\x04\x00\x00\x0e\x10'  # Lease time
     options += b'\xff'  # End 
 
-    # Calculate UDP length and checksum
+    # Calcula UDP length e checksum
     udp_length = 8 + len(dhcp_header) + len(options)
     pseudo_header = source_ip + dest_ip + struct.pack('!BBH', 0, protocol, udp_length)
     udp_checksum = calculate_checksum(pseudo_header + udp_header + dhcp_header + options)
@@ -184,8 +184,8 @@ def create_dhcp_ack(transaction_id, server_mac, client_mac, server_ip, offered_i
     return packet
 
 
-# Função principal para executar o ataque DHCP
-def dhcp_attack():
+# Função principal para executar o servidor DHCP
+def dhcp_server():
     hostname = socket.gethostname()
 
     server_ip = socket.gethostbyname(hostname)
@@ -213,20 +213,19 @@ def dhcp_attack():
             message_type = packet[284-14]
             print("Message Type: ", message_type)
 
-            ## dados do header eth
+            # dados do header eth
             eth_header = packet[0:14]
 
-            ## dados do header ip
+            # dados do header ip
             ip_header = packet [15:34]
 
-            #transaction_id = dhcp_header[4:8]
+            # transaction_id = dhcp_header[4:8]
             transaction_id = packet[46-14:50-14]
             print("Transaction ID: ", transaction_id.hex())
             client_mac = packet[70-14:76-14]
             print("Client MAC: ", client_mac.hex())
 
-
-            # Envia Pacotes
+            # Envia Pacotes de Offer e Ack
             if message_type == 1:
                 print(f'DHCP Discover recebido de {addr}, enviando DHCP Offer')
                 offer_packet = create_dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, mascara, router_ip, dns_ip)
@@ -242,7 +241,7 @@ def dhcp_attack():
 
 if __name__ == "__main__":
    try:
-       dhcp_attack()
+       dhcp_server()
    except PermissionError:
-       print("Erro: Este programa deve ser executado com privilégios de superusuário.")
+       print("Error: PermissionError.")
        sys.exit(1)
