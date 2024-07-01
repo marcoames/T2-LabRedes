@@ -122,7 +122,6 @@ def dhcp_offer(transaction_id, server_mac, client_mac, server_ip, offered_ip, ma
 
     # Pacote final
     packet = eth_header + ip_header + udp_header + dhcp_header + options
-    packet = ip_header + udp_header + dhcp_header + options
 
     print("Enviando Pacote Offer: ", packet)
 
